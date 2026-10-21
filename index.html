@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Parisien Radio: Pure French House</title>
+<link rel="icon" type="image/x-icon" href="https://i.ibb.co/RkF7sCZS/parisien-radio.png">
+<meta name="description" content="Non-stop French / Disco / Filter House.">
+<meta name="theme-color" content="#12141d" id="tc">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="bar">
+      <a class="brandlink" href="#top"><i class="mark"></i><span class="brand">Parisien Radio</span></a>
+      <nav aria-label="Sections"><a href="#listen">Listen</a><a href="#about">About</a><a href="#recent">Recently played</a><a href="#artists">Artists</a></nav>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero" id="hero">
+    <div class="wrap stage" id="listen">
+      <div class="art" id="art"><span id="artph">P</span></div>
+      <div class="player" id="player">
+        <div class="livelabel">Now playing:</div>
+        <h1 class="title" id="song">Parisien Radio</h1>
+        <p class="artist" id="artist">Press play to tune in</p>
+        <div class="pctl">
+          <button class="pbtn" id="play" type="button" aria-label="Play"><svg viewBox="0 0 24 24" id="ico"><path d="M8 5v14l11-7z"/></svg></button>
+          <span class="pstate" id="status" role="status">Tune in</span>
+          <label class="pvol"><span class="vsr">Volume</span><svg class="vicon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4zM15.5 9a4 4 0 010 6"/></svg><input class="range" type="range" id="vol" min="0" max="1" step="0.01" value="0.8" aria-label="Volume"></label>
+        </div>
+        <audio id="audio" preload="none" data-src="https://usa3.fastcast4u.com/proxy/foenemradio?mp=/stream"></audio>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec wrap" id="about">
+    <h2>What is Parisien Radio?</h2>
+    <div class="prose">
+      <p>Parisien Radio is a non-stop internet radio station for French house, disco house and filter house: sample-heavy loops, sidechained basslines and sun-soaked samples, all day and all night.</p>
+      <p>It's a live stream, so everyone hears the same track at the same moment. Press play to join whatever is on right now, and pause whenever you like. You'll rejoin the stream live.</p>
+    </div>
+  </section>
+
+  <section class="sec wrap" id="elsewhere">
+    <h2>Listen elsewhere</h2>
+    <p class="note">Use the stream in any app that plays internet radio.</p>
+    <div class="rows">
+      <div class="row"><div><b>Stream URL</b><span id="surl"></span></div><button class="btn" id="copyurl" type="button">Copy</button></div>
+      <div class="row"><div><b>Playlist file</b><span>.m3u for VLC, iTunes and most radio apps</span></div><a class="btn" href="parisien-radio.m3u" download>Download</a></div>
+    </div>
+  </section>
+
+  <section class="sec wrap" id="recent">
+    <h2>Recently played</h2><p class="note">Saved on this device</p>
+    <div class="crate" id="crate"></div>
+  </section>
+
+  <section class="sec wrap" id="artists">
+    <h2>Artists we've played</h2>
+    <div class="artists" id="artlist"></div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="bigmark" aria-hidden="true">Parisien Radio</div>
+    <div class="footbar"><span>© <span id="yr"></span> Parisien Radio</span></div>
+  </div>
+</footer>
+
+<script>
+const $=id=>document.getElementById(id);
+$("yr").textContent=new Date().getFullYear();
+
+/* theme */
+const root=document.documentElement;
+const C={a:"#8b6bff",p:"#ff5c8a",o:"#ff9d4d",line:"rgba(255,255,255,.09)"};
+function readColors(){const s=getComputedStyle(root),g=n=>s.getPropertyValue(n).trim();
+  C.a=g("--accent")||C.a;C.p=g("--pink")||C.p;C.o=g("--amber")||C.o;C.line=g("--line")||C.line;
+  $("tc").content=g("--bg")||"#0b0c10"}
+readColors();
+
+/* player: live stream, so pause = disconnect and play rejoins at the live edge */
+const NP_URL="https://usa3.fastcast4u.com/rpc/foenemradio/streaminfo.get"; // Centova Cast feed
+const BURST=0; // seconds the server pushes on connect; tune so titles change in sync with the audio
+const audio=$("audio"),playBtn=$("play"),STREAM=audio.dataset.src;
+const PLAY='<path d="M8 5v14l11-7z"/>',PAUSE='<path d="M6 5h4v14H6zm8 0h4v14h-4z"/>';
+let want=false,started=false,retries=0,retryT=0,stallStart=0,st={loadAt:0,playAt:0,stall:0};
+
+function setUI(label,p){$("status").textContent=label;$("ico").innerHTML=p?PAUSE:PLAY;
+  $("player").classList.toggle("playing",p);playBtn.setAttribute("aria-label",p?"Pause":"Play")}
+function connect(){
+  clearTimeout(retryT);started=false;stallStart=0;st={loadAt:Date.now(),playAt:0,stall:0};
+  audio.removeAttribute("crossorigin");
+  audio.src=STREAM;audio.load();setUI("Connecting…",true);
+  const p=audio.play();
+  if(p&&p.catch)p.catch(e=>{if(e&&e.name==="AbortError")return;fail("Tap play to retry")});
+}
+function disconnect(){clearTimeout(retryT);audio.pause();audio.removeAttribute("src");audio.load();started=false;stallStart=0;st={loadAt:0,playAt:0,stall:0}}
+function fail(l){want=false;disconnect();setUI(l,false)}
+function play(){want=true;retries=0;connect()}
+function pause(){want=false;disconnect();setUI("Tune in",false)}
+playBtn.onclick=()=>want?pause():play();
+audio.addEventListener("playing",()=>{if(!want)return;
+  if(!started){started=true;st.playAt=Date.now()}else if(stallStart)st.stall+=Date.now()-stallStart;
+  stallStart=0;retries=0;setUI("Live",true);resync();});
+const stalled=()=>{if(!want||!started||stallStart)return;stallStart=Date.now();setUI("Buffering…",true)};
+audio.addEventListener("waiting",stalled);audio.addEventListener("stalled",stalled);
+function dropped(){if(!want)return;if(retries>=4){fail("Stream offline");return}
+  retries++;setUI("Reconnecting…",true);clearTimeout(retryT);retryT=setTimeout(()=>{if(want)connect()},1500*retries)}
+audio.addEventListener("error",()=>{
+  if(!want||!audio.getAttribute("src"))return;
+  dropped()});
+audio.addEventListener("ended",dropped);
+const vol=$("vol");
+try{const s=parseFloat(localStorage.getItem("parisien-vol"));if(s>=0&&s<=1)vol.value=s}catch(e){}
+const applyVol=()=>{const v=parseFloat(vol.value);audio.volume=v;try{localStorage.setItem("parisien-vol",vol.value)}catch(e){}};
+vol.oninput=applyVol;applyVol();
+if("mediaSession" in navigator){try{const m=navigator.mediaSession;m.setActionHandler("play",play);m.setActionHandler("pause",pause);m.setActionHandler("stop",pause)}catch(e){}}
+
+/* recently played: kept on this device so it survives a reload */
+let recent=[];try{recent=JSON.parse(localStorage.getItem("parisien-recent")||"[]").slice(0,12)}catch(e){}
+const saveRecent=()=>{try{localStorage.setItem("parisien-recent",JSON.stringify(recent))}catch(e){}};
+function ago(t){const m=Math.round((Date.now()-t)/60000);return m<1?"just now":m<60?m+" min ago":Math.round(m/60)+" h ago"}
+function drawRecent(){
+  const el=$("crate");el.textContent="";const list=recent.slice(1);   // the current track is already in the hero
+  if(!list.length){const p=document.createElement("p");p.className="none";p.textContent="Tracks that have played will line up here.";el.append(p);return}
+  for(const r of list){
+    const a=document.createElement("div");a.className="tile";
+    const c=document.createElement("div");c.className="cv";
+    if(r.art)c.style.backgroundImage='url("'+r.art.replace(/"/g,"%22")+'")';else c.textContent=(r.title||"P").charAt(0);
+    const b=document.createElement("b");b.textContent=r.title;
+    const s=document.createElement("span");s.textContent=r.artist||"Parisien Radio";
+    const t=document.createElement("time");t.textContent=ago(r.at);
+    a.append(c,b,s,t);el.append(a);
+  }
+}
+function pushRecent(song,title,artist){
+  if(recent[0]&&recent[0].song===song)return;
+  recent.unshift({song,title,artist,art:"",at:Date.now()});noteArtist(artist);recent.length=Math.min(recent.length,12);saveRecent();drawRecent();
+}
+drawRecent();setInterval(drawRecent,60000);
+
+/* now playing */
+let lastSong=null,lastSeen=null,lastArt="",pending=[],skew=0;
+function lag(){if(audio.paused||!audio.currentTime)return 0;if(!st.playAt)return BURST;return BURST+(st.playAt-st.loadAt)/1000+st.stall/1000}
+function setArt(src){if(src===lastArt)return;lastArt=src;const a=$("art"),u=src?'url("'+src.replace(/"/g,"%22")+'")':"";
+  a.style.backgroundImage=u;a.classList.toggle("has",!!src);
+  if(u)$("hero").style.setProperty("--cover",u);else $("hero").style.removeProperty("--cover");
+  if(src&&recent[0]&&recent[0].song===lastSong&&!recent[0].art){recent[0].art=src;saveRecent()}}
+function songOf(i){const r=i&&i.rawmeta;if(r)return r.trim();const t=i&&i.track;return t?((t.artist?t.artist+" - ":"")+(t.title||"")):""}
+function apply(i){
+  const t=i.track;let title="",artist="";const raw=i.rawmeta;
+  if(raw){const c=raw.indexOf(" - ");if(c>0){artist=raw.slice(0,c).trim();title=raw.slice(c+3).trim()}else title=raw.trim()}
+  if(!title&&t){artist=t.artist||"";title=t.title||""}
+  if(!title)return;
+  const song=artist?artist+" - "+title:title;if(song===lastSong)return;lastSong=song;
+  pushRecent(song,title,artist);$("song").textContent=title;$("artist").textContent=artist||"Parisien Radio";
+  if("mediaSession" in navigator&&typeof MediaMetadata!=="undefined")navigator.mediaSession.metadata=new MediaMetadata({title,artist,album:"Parisien Radio"});
+  const art=(t&&t.imageurl)||"";
+  if(art&&!/nocover/i.test(art))setArt(art);else{setArt("");itunesArt(artist,title)}
+}
+async function itunesArt(a,s){try{const q=encodeURIComponent((a+" "+s).replace(/\(.*?\)/g,"").trim());
+  const j=await (await fetch("https://itunes.apple.com/search?media=music&limit=1&term="+q)).json();
+  const u=j.results&&j.results[0]&&j.results[0].artworkUrl100;if(u&&lastSong&&lastSong.includes(s))setArt(u.replace("100x100","600x600"))}catch(e){}}
+function offline(){lastSong=lastSeen=null;pending.length=0;$("song").textContent="Parisien Radio";$("artist").textContent="Off air for now";setArt("")}
+function handle(d){
+  const i=d&&d.data&&d.data[0];
+  if(!i||i.server!=="Online"){offline();return}
+  const song=songOf(i);if(song===lastSeen)return;lastSeen=song;
+  if(lag()<1){apply(i);return}
+  const s=i.track&&i.track.started,due=s?s*1000-skew+lag()*1000:Date.now();
+  if(due<=Date.now())apply(i);else pending.push({due,i});
+}
+function jsonp(){const cb="__fnp"+Date.now(),s=document.createElement("script");let done=false;
+  const clean=()=>{try{delete window[cb]}catch(e){}s.remove()};
+  window[cb]=d=>{done=true;handle(d);clean()};s.onerror=clean;setTimeout(()=>{if(!done)clean()},8000);
+  s.src=NP_URL+(NP_URL.includes("?")?"&":"?")+"callback="+cb;document.head.appendChild(s)}
+function poll(){
+  fetch(NP_URL,{cache:"no-store"}).then(r=>{const d=r.headers.get("date");if(d){const t=Date.parse(d);if(!isNaN(t))skew=t-Date.now()}return r.json()}).then(handle).catch(jsonp)}
+function resync(){pending.length=0;lastSeen=null;poll()}
+poll();setInterval(poll,3000);
+setInterval(()=>{const n=Date.now();while(pending.length&&pending[0].due<=n)apply(pending.shift().i)},500);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)poll()});
+
+
+/* artists played: names are kept on this device. Put a Discogs personal access token in DISCOGS_TOKEN
+   (discogs.com/settings/developers) to also pull each artist's photo and profile link. */
+const DISCOGS_TOKEN="vpaHbyubHMbcnwfQkZeQNYbODzLptbjGueJKfGEC";
+let artists={};try{artists=JSON.parse(localStorage.getItem("parisien-artists")||"{}")}catch(e){}
+const saveArtists=()=>{try{localStorage.setItem("parisien-artists",JSON.stringify(artists))}catch(e){}};
+function drawArtists(){
+  const el=$("artlist");el.textContent="";
+  const list=Object.values(artists).sort((a,b)=>b.at-a.at).slice(0,24);
+  if(!list.length){const p=document.createElement("p");p.className="none";p.textContent="Artists will appear here as tracks play.";el.append(p);return}
+  for(const r of list){
+    const a=document.createElement("a");a.className="artist-i";target(a);
+    a.href=r.uri||"https://www.discogs.com/search/?type=artist&q="+encodeURIComponent(r.name);
+    const c=document.createElement("div");c.className="av";
+    if(r.img)c.style.backgroundImage='url("'+r.img.replace(/"/g,"%22")+'")';else c.textContent=r.name.charAt(0);
+    const n=document.createElement("b");n.textContent=r.name;
+    a.append(c,n);el.append(a);
+  }
+}
+function target(a){a.target="_blank";a.rel="noopener"}
+async function lookupArtist(a){
+  a.tried=1;
+  try{const j=await (await fetch("https://api.discogs.com/database/search?type=artist&per_page=1&token="+DISCOGS_TOKEN+"&q="+encodeURIComponent(a.name))).json();
+    const x=j.results&&j.results[0];
+    if(x){a.img=(x.cover_image&&!/spacer/.test(x.cover_image)?x.cover_image:x.thumb)||"";a.uri=x.uri?"https://www.discogs.com"+x.uri:""}
+  }catch(e){a.tried=0}
+  saveArtists();drawArtists();
+}
+function noteArtist(name){
+  if(!name||name==="Parisien Radio")return;
+  const k=name.toLowerCase(),a=artists[k]||(artists[k]={name,img:"",uri:"",tried:0});
+  a.at=Date.now();saveArtists();drawArtists();
+  if(DISCOGS_TOKEN&&!a.tried)lookupArtist(a);
+}
+drawArtists();
+
+function flash(btn,t){const o=btn.dataset.o||btn.textContent;btn.dataset.o=o;btn.textContent=t;clearTimeout(btn._t);btn._t=setTimeout(()=>btn.textContent=o,1800)}
+
+/* listen elsewhere */
+$("surl").textContent=STREAM;
+$("copyurl").onclick=async()=>{try{await navigator.clipboard.writeText(STREAM);flash($("copyurl"),"Copied")}catch(e){flash($("copyurl"),"Couldn't copy")}};
+
+/* keep the song info visually centred: shrink the text column to its widest line so there is no empty slack on the right */
+function fitPlayer(){
+  const pl=$("player");pl.style.width="";
+  if(innerWidth<=700)return;
+  const l=pl.getBoundingClientRect().left,rg=document.createRange();let w=0;
+  for(const el of [$("song"),$("artist"),document.querySelector(".pctl")]){rg.selectNodeContents(el);for(const r of rg.getClientRects())w=Math.max(w,r.right-l)}
+  pl.style.width=Math.ceil(w)+2+"px";
+}
+new MutationObserver(fitPlayer).observe($("player"),{childList:true,characterData:true,subtree:true});
+addEventListener("resize",fitPlayer);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(fitPlayer);fitPlayer();
+</script>
+</body>
+</html>
