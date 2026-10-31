@@ -18,7 +18,7 @@
   <div class="wrap">
     <div class="bar">
       <a class="brandlink" href="#top"><i class="mark"></i><span class="brand">Parisien Radio</span></a>
-      <nav aria-label="Sections"><a href="#listen">Listen</a><a href="#about">About</a><a href="#recent">Recently played</a><a href="#artists">Artists</a></nav>
+      <nav aria-label="Sections"><a href="#listen">Listen</a><a href="#about">About</a><a href="#decks">Turntable</a></nav>
     </div>
   </div>
 </header>
@@ -58,14 +58,21 @@
     </div>
   </section>
 
-  <section class="sec wrap" id="recent">
-    <h2>Recently played</h2><p class="note">Saved on this device</p>
-    <div class="crate" id="crate"></div>
-  </section>
 
-  <section class="sec wrap" id="artists">
-    <h2>Artists we've played</h2>
-    <div class="artists" id="artlist"></div>
+  <section class="sec wrap" id="decks">
+    <h2>Turntable</h2>
+    <p class="note">Just for fun. Hit start and the radio spins on the deck.</p>
+    <div class="deck" id="deck">
+      <img class="base" src="img/turntable-deck.png" alt="Silver direct-drive turntable" width="597" height="464">
+      <img class="platter" id="rec" src="img/turntable-platter.png" alt="" width="448" height="448">
+      <img class="glow" src="img/turntable-glow.png" alt="" width="42" height="41">
+      <button class="hot" id="dhot" type="button" aria-label="Start or stop the turntable"></button>
+    </div>
+    <div class="dctl">
+      <button class="pbtn sm" id="dstart" type="button" aria-label="Start the turntable"><svg viewBox="0 0 24 24" id="dico"><path d="M8 5v14l11-7z"/></svg></button>
+      <span class="pstate" id="dstate" role="status">Stopped</span>
+      <label class="pvol"><span class="vsr">Turntable volume</span><svg class="vicon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4zM15.5 9a4 4 0 010 6"/></svg><input class="range" type="range" id="dvol" min="0" max="1" step="0.01" value="0.8" aria-label="Turntable volume"></label>
+    </div>
   </section>
 </main>
 
@@ -106,7 +113,7 @@ function connect(){
 }
 function disconnect(){clearTimeout(retryT);audio.pause();audio.removeAttribute("src");audio.load();started=false;stallStart=0;st={loadAt:0,playAt:0,stall:0}}
 function fail(l){want=false;disconnect();setUI(l,false)}
-function play(){want=true;retries=0;connect()}
+function play(){if(window.deckStop)deckStop();want=true;retries=0;connect()}
 function pause(){want=false;disconnect();setUI("Tune in",false)}
 playBtn.onclick=()=>want?pause():play();
 audio.addEventListener("playing",()=>{if(!want)return;
@@ -126,36 +133,12 @@ const applyVol=()=>{const v=parseFloat(vol.value);audio.volume=v;try{localStorag
 vol.oninput=applyVol;applyVol();
 if("mediaSession" in navigator){try{const m=navigator.mediaSession;m.setActionHandler("play",play);m.setActionHandler("pause",pause);m.setActionHandler("stop",pause)}catch(e){}}
 
-/* recently played: kept on this device so it survives a reload */
-let recent=[];try{recent=JSON.parse(localStorage.getItem("parisien-recent")||"[]").slice(0,12)}catch(e){}
-const saveRecent=()=>{try{localStorage.setItem("parisien-recent",JSON.stringify(recent))}catch(e){}};
-function ago(t){const m=Math.round((Date.now()-t)/60000);return m<1?"just now":m<60?m+" min ago":Math.round(m/60)+" h ago"}
-function drawRecent(){
-  const el=$("crate");el.textContent="";const list=recent.slice(1);   // the current track is already in the hero
-  if(!list.length){const p=document.createElement("p");p.className="none";p.textContent="Tracks that have played will line up here.";el.append(p);return}
-  for(const r of list){
-    const a=document.createElement("div");a.className="tile";
-    const c=document.createElement("div");c.className="cv";
-    if(r.art)c.style.backgroundImage='url("'+r.art.replace(/"/g,"%22")+'")';else c.textContent=(r.title||"P").charAt(0);
-    const b=document.createElement("b");b.textContent=r.title;
-    const s=document.createElement("span");s.textContent=r.artist||"Parisien Radio";
-    const t=document.createElement("time");t.textContent=ago(r.at);
-    a.append(c,b,s,t);el.append(a);
-  }
-}
-function pushRecent(song,title,artist){
-  if(recent[0]&&recent[0].song===song)return;
-  recent.unshift({song,title,artist,art:"",at:Date.now()});noteArtist(artist);recent.length=Math.min(recent.length,12);saveRecent();drawRecent();
-}
-drawRecent();setInterval(drawRecent,60000);
-
 /* now playing */
 let lastSong=null,lastSeen=null,lastArt="",pending=[],skew=0;
 function lag(){if(audio.paused||!audio.currentTime)return 0;if(!st.playAt)return BURST;return BURST+(st.playAt-st.loadAt)/1000+st.stall/1000}
 function setArt(src){if(src===lastArt)return;lastArt=src;const a=$("art"),u=src?'url("'+src.replace(/"/g,"%22")+'")':"";
   a.style.backgroundImage=u;a.classList.toggle("has",!!src);
-  if(u)$("hero").style.setProperty("--cover",u);else $("hero").style.removeProperty("--cover");
-  if(src&&recent[0]&&recent[0].song===lastSong&&!recent[0].art){recent[0].art=src;saveRecent()}}
+  if(u)root.style.setProperty("--cover",u);else root.style.removeProperty("--cover");}
 function songOf(i){const r=i&&i.rawmeta;if(r)return r.trim();const t=i&&i.track;return t?((t.artist?t.artist+" - ":"")+(t.title||"")):""}
 function apply(i){
   const t=i.track;let title="",artist="";const raw=i.rawmeta;
@@ -163,7 +146,7 @@ function apply(i){
   if(!title&&t){artist=t.artist||"";title=t.title||""}
   if(!title)return;
   const song=artist?artist+" - "+title:title;if(song===lastSong)return;lastSong=song;
-  pushRecent(song,title,artist);$("song").textContent=title;$("artist").textContent=artist||"Parisien Radio";
+  $("song").textContent=title;$("artist").textContent=artist||"Parisien Radio";
   if("mediaSession" in navigator&&typeof MediaMetadata!=="undefined")navigator.mediaSession.metadata=new MediaMetadata({title,artist,album:"Parisien Radio"});
   const art=(t&&t.imageurl)||"";
   if(art&&!/nocover/i.test(art))setArt(art);else{setArt("");itunesArt(artist,title)}
@@ -192,41 +175,6 @@ setInterval(()=>{const n=Date.now();while(pending.length&&pending[0].due<=n)appl
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)poll()});
 
 
-/* artists played: names are kept on this device. Put a Discogs personal access token in DISCOGS_TOKEN
-   (discogs.com/settings/developers) to also pull each artist's photo and profile link. */
-const DISCOGS_TOKEN="vpaHbyubHMbcnwfQkZeQNYbODzLptbjGueJKfGEC";
-let artists={};try{artists=JSON.parse(localStorage.getItem("parisien-artists")||"{}")}catch(e){}
-const saveArtists=()=>{try{localStorage.setItem("parisien-artists",JSON.stringify(artists))}catch(e){}};
-function drawArtists(){
-  const el=$("artlist");el.textContent="";
-  const list=Object.values(artists).sort((a,b)=>b.at-a.at).slice(0,24);
-  if(!list.length){const p=document.createElement("p");p.className="none";p.textContent="Artists will appear here as tracks play.";el.append(p);return}
-  for(const r of list){
-    const a=document.createElement("a");a.className="artist-i";target(a);
-    a.href=r.uri||"https://www.discogs.com/search/?type=artist&q="+encodeURIComponent(r.name);
-    const c=document.createElement("div");c.className="av";
-    if(r.img)c.style.backgroundImage='url("'+r.img.replace(/"/g,"%22")+'")';else c.textContent=r.name.charAt(0);
-    const n=document.createElement("b");n.textContent=r.name;
-    a.append(c,n);el.append(a);
-  }
-}
-function target(a){a.target="_blank";a.rel="noopener"}
-async function lookupArtist(a){
-  a.tried=1;
-  try{const j=await (await fetch("https://api.discogs.com/database/search?type=artist&per_page=1&token="+DISCOGS_TOKEN+"&q="+encodeURIComponent(a.name))).json();
-    const x=j.results&&j.results[0];
-    if(x){a.img=(x.cover_image&&!/spacer/.test(x.cover_image)?x.cover_image:x.thumb)||"";a.uri=x.uri?"https://www.discogs.com"+x.uri:""}
-  }catch(e){a.tried=0}
-  saveArtists();drawArtists();
-}
-function noteArtist(name){
-  if(!name||name==="Parisien Radio")return;
-  const k=name.toLowerCase(),a=artists[k]||(artists[k]={name,img:"",uri:"",tried:0});
-  a.at=Date.now();saveArtists();drawArtists();
-  if(DISCOGS_TOKEN&&!a.tried)lookupArtist(a);
-}
-drawArtists();
-
 function flash(btn,t){const o=btn.dataset.o||btn.textContent;btn.dataset.o=o;btn.textContent=t;clearTimeout(btn._t);btn._t=setTimeout(()=>btn.textContent=o,1800)}
 
 /* listen elsewhere */
@@ -243,6 +191,53 @@ function fitPlayer(){
 }
 new MutationObserver(fitPlayer).observe($("player"),{childList:true,characterData:true,subtree:true});
 addEventListener("resize",fitPlayer);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(fitPlayer);fitPlayer();
+
+/* turntable: just for fun. Plays the live stream on its own audio element (the main player pauses while it runs).
+   The platter is a photo layer that spins; start/stop spins up and down quickly and the sound follows it. */
+(function(){
+  const deckEl=$("deck"),rec=$("rec"),btn=$("dstart"),hot=$("dhot"),stat=$("dstate"),dvol=$("dvol");
+  const d=new Audio();d.preload="none";
+  for(const k of ["preservesPitch","mozPreservesPitch","webkitPreservesPitch"])if(k in d)d[k]=false;   // vinyl-style wind up/down
+  const BASE=200,STOP='<path d="M7 7h10v10H7z"/>';                 // 33 1/3 rpm = 200 degrees per second
+  let on=false,live=false,ang=0,vel=0,t0=0,tries=0;
+  const say=t=>{stat.textContent=t};
+  const icon=p=>{$("dico").innerHTML=p?STOP:PLAY;btn.setAttribute("aria-label",p?"Stop the turntable":"Start the turntable")};
+  dvol.value=vol.value;                                             // one volume for both players
+  dvol.oninput=()=>{vol.value=dvol.value;applyVol()};
+  vol.addEventListener("input",()=>{dvol.value=vol.value});
+  function cut(){live=false;d.pause();d.removeAttribute("src");d.load()}
+  function lift(){on=false;deckEl.classList.remove("on");icon(false)}
+  function fail(){lift();cut();say("Couldn't reach the stream")}
+  window.deckStop=()=>{if(on||live){lift();cut();say("Stopped")}};
+  function start(){
+    if(want)pause();                                                  // only one thing plays at a time
+    on=true;tries=0;deckEl.classList.add("on");icon(true);say("Connecting…");
+    d.src=STREAM;d.load();const p=d.play();if(p&&p.catch)p.catch(e=>{if(e&&e.name==="AbortError")return;fail()});
+  }
+  const toggle=()=>{if(on){lift();say("Spinning down…")}else start()};
+  btn.onclick=toggle;hot.onclick=toggle;
+  d.addEventListener("playing",()=>{if(!on)return;live=true;say("On air")});
+  d.addEventListener("waiting",()=>{if(on&&live)say("Buffering…")});
+  const lost=()=>{if(!on||!d.getAttribute("src"))return;if(tries++<2)setTimeout(()=>{if(on){d.src=STREAM;d.load();d.play().catch(()=>{})}},1200);else fail()};
+  d.addEventListener("error",lost);d.addEventListener("ended",lost);
+
+  function frame(now){
+    requestAnimationFrame(frame);
+    const dt=Math.min(.1,(now-(t0||now))/1000);t0=now;
+    vel+=((on?BASE:0)-vel)*(1-Math.exp(-dt/(on?.2:.3)));              // quick spin up, short spin down
+    if(!on&&vel<2)vel=0;
+    ang=(ang+vel*dt)%360;
+    rec.style.transform="rotate("+ang.toFixed(2)+"deg)";
+    const rate=vel/BASE;                                              // 1 = normal speed
+    if(on||live){
+      const r=Math.min(1,Math.max(.1,rate));
+      try{if(Math.abs(d.playbackRate-r)>.01)d.playbackRate=r}catch(e){}
+      d.volume=Math.max(0,Math.min(1,parseFloat(vol.value)*Math.min(1,rate/.35)));
+    }
+    if(!on&&live&&rate<.15){cut();say("Stopped")}                     // finished spinning down
+  }
+  requestAnimationFrame(frame);
+})();
 </script>
 </body>
 </html>
