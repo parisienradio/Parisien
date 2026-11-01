@@ -104,7 +104,22 @@ footer { margin-top: clamp(64px, 9vw, 112px); border-top: 1px solid var(--line);
 .deck { position: relative; width: min(640px, 100%); aspect-ratio: 597 / 464; margin: 32px auto 0; }
 .deck img { position: absolute; display: block; user-select: none; -webkit-user-drag: none; pointer-events: none; }
 .deck .base { inset: 0; width: 100%; height: 100%; filter: drop-shadow(0 28px 36px rgba(0,0,0,.55)); }
-.deck .platter { left: 1.926%; top: 1.293%; width: 75.04%; height: auto; aspect-ratio: 1; will-change: transform; }
+.spin { position: absolute; left: 1.926%; top: 1.293%; width: 75.04%; aspect-ratio: 1; will-change: transform; pointer-events: none; }
+.deck .platter { inset: 0; width: 100%; height: 100%; }
+.vinyl { position: absolute; left: 8.04%; top: 8.04%; width: 83.93%; height: 83.93%; border-radius: 50%;
+  background: repeating-radial-gradient(circle at 50% 50%, #07080c 0 1.2px, #14161e 1.2px 2.4px); box-shadow: 0 0 0 1px #000, inset 0 0 0 4px #0b0c11; }
+.vinyl::before { content: ""; position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 0deg, transparent 0 6%, rgba(255,255,255,.07) 9%, transparent 12% 50%, rgba(255,255,255,.07) 59%, transparent 62%); }
+.vinyl::after { content: ""; position: absolute; left: 49%; top: 2.5%; width: 2%; height: 7%; border-radius: 2px; background: rgba(255,255,255,.5); }
+.lbl { position: absolute; left: 33%; top: 33%; width: 34%; height: 34%; border-radius: 50%; box-shadow: 0 0 0 2px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.12);
+  background: var(--cover, none) center / cover, conic-gradient(var(--pink), var(--amber), var(--accent), var(--pink)); }
+.lbl::after { content: ""; position: absolute; left: 46%; top: 46%; width: 8%; height: 8%; border-radius: 50%; background: #d8dbe6; box-shadow: 0 0 0 1px rgba(0,0,0,.5); }
+.sheen { position: absolute; left: 7.96%; top: 9.05%; width: 62.98%; aspect-ratio: 1; border-radius: 50%; pointer-events: none;
+  background: conic-gradient(from 30deg, transparent 0 12%, rgba(255,255,255,.11) 17%, transparent 22% 55%, rgba(255,255,255,.07) 62%, transparent 68%); }
+.deck .arm { left: 71.86%; top: 27.59%; width: 17.09%; height: 66.16%; transform-origin: 75.98% 2.93%;
+  transition: transform .8s cubic-bezier(.4,0,.25,1.06); filter: drop-shadow(3px 5px 4px rgba(0,0,0,.42)); }
+.deck .collar { left: 80.23%; top: 27.59%; width: 8.38%; height: 5.6%; }
+.deck.on .arm { transform: rotate(25deg); }
+@media (prefers-reduced-motion: reduce) { .deck .arm { transition: none; } }
 .deck .glow { left: 6.95%; top: 71.55%; width: 7.04%; height: 8.84%; opacity: .9; }
 .hot { position: absolute; left: 1.84%; top: 87.5%; width: 9.7%; height: 8.6%; border: 0; border-radius: 3px; background: none; cursor: pointer; transition: box-shadow .15s; }
 .hot:hover { box-shadow: 0 0 0 2px rgba(139,107,255,.75); }
